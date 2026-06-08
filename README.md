@@ -15,3 +15,8 @@ SET search_path TO raw;
 \dt
 
 als je tabellen ziet, is alles goed
+
+doe in je terminal
+\q
+
+dan kun je weer codes schrijven anders zit je nog in postgreSQL
