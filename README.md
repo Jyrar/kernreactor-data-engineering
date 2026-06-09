@@ -2,7 +2,13 @@
 Geïnspireerd door Emiel en ODC Noord
 
 git clone https://github.com/Jyrar/kernreactor-data-engineering.git
+
+dan
+
 cd kernreactor-data-engineering
+
+dan 
+
 powershell -ExecutionPolicy Bypass -File .\setup_project.ps1
 
 dan
