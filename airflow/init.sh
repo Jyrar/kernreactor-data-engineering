@@ -1,6 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
+pip install --quiet pandas sqlalchemy psycopg2-binary
+
 airflow db migrate
 
 airflow users create \

@@ -11,7 +11,7 @@ services:
       - "5434:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ../data/raw:/data/raw
+      - ../data:/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U nuclear_user -d nuclear_source"]
       interval: 5s
@@ -28,11 +28,20 @@ services:
     entrypoint: ["/bin/bash", "-c"]
     command:
       - |
-        psql -h postgres -U nuclear_user -d nuclear_source -v ON_ERROR_STOP=1 <<'SQL'
-        SELECT 'CREATE USER airflow WITH PASSWORD ''airflow_password'''
-        WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'airflow')\gexec
+        set -e
+        psql -h postgres -U nuclear_user -d postgres -v ON_ERROR_STOP=1 <<'SQL'
+        SELECT 'CREATE ROLE airflow WITH LOGIN PASSWORD ''airflow_password'''
+        WHERE NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'airflow')\gexec
         SELECT 'CREATE DATABASE airflow OWNER airflow'
         WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'airflow')\gexec
+        SQL
+        psql -h postgres -U nuclear_user -d nuclear_source -v ON_ERROR_STOP=1 <<'SQL'
+        CREATE SCHEMA IF NOT EXISTS raw;
+        GRANT CONNECT ON DATABASE nuclear_source TO airflow;
+        GRANT CREATE ON DATABASE nuclear_source TO airflow;
+        GRANT USAGE, CREATE ON SCHEMA raw TO airflow;
+        GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA raw TO airflow;
+        ALTER DEFAULT PRIVILEGES IN SCHEMA raw GRANT ALL ON TABLES TO airflow;
         SQL
     restart: "no"
 
@@ -47,15 +56,17 @@ services:
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow_password@postgres/airflow
       - AIRFLOW__CORE__FERNET_KEY=EXAMPLE_FERNET_KEY
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW_CONN_POSTGRES_NUCLEAR=postgresql+psycopg2://nuclear_user:nuclear_password@postgres:5432/nuclear_source
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/logs:/opt/airflow/logs
       - ./airflow/plugins:/opt/airflow/plugins
       - ./airflow/init.sh:/opt/airflow/init.sh
+      - ./scripts:/opt/airflow/scripts
+      - ../data:/data
     ports:
-      - "8080:8080"
+      - "8081:8080"
     entrypoint: ["/bin/bash", "/opt/airflow/init.sh"]
-
 
 volumes:
   postgres_data:
