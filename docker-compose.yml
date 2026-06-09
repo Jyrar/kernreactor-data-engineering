@@ -1,0 +1,61 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: kernreactor_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: nuclear_user
+      POSTGRES_PASSWORD: nuclear_password
+      POSTGRES_DB: nuclear_source
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../data/raw:/data/raw
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nuclear_user -d nuclear_source"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  postgres-init:
+    image: postgres:16
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: nuclear_password
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        psql -h postgres -U nuclear_user -d nuclear_source -v ON_ERROR_STOP=1 <<'SQL'
+        SELECT 'CREATE USER airflow WITH PASSWORD ''airflow_password'''
+        WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'airflow')\gexec
+        SELECT 'CREATE DATABASE airflow OWNER airflow'
+        WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'airflow')\gexec
+        SQL
+    restart: "no"
+
+  airflow:
+    image: apache/airflow:2.8.1-python3.10
+    restart: always
+    depends_on:
+      postgres-init:
+        condition: service_completed_successfully
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow_password@postgres/airflow
+      - AIRFLOW__CORE__FERNET_KEY=EXAMPLE_FERNET_KEY
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./airflow/plugins:/opt/airflow/plugins
+      - ./airflow/init.sh:/opt/airflow/init.sh
+    ports:
+      - "8080:8080"
+    entrypoint: ["/bin/bash", "/opt/airflow/init.sh"]
+
+
+volumes:
+  postgres_data:
